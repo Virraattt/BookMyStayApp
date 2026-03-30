@@ -1,74 +1,93 @@
 import java.util.*;
+
 class Reservation {
     private String id;
     private String guestName;
     private String roomType;
-    public Reservation(String id, String guestName, String roomType) {
+    private int quantity;
+
+    public Reservation(String id, String guestName, String roomType, int quantity) {
         this.id = id;
         this.guestName = guestName;
         this.roomType = roomType;
+        this.quantity = quantity;
     }
+
     public String getId() {
         return id;
     }
+
     public String getGuestName() {
         return guestName;
     }
+
     public String getRoomType() {
         return roomType;
     }
-}
-class AddOnService {
-    private String name;
-    private double cost;
-    public AddOnService(String name, double cost) {
-        this.name = name;
-        this.cost = cost;
-    }
-    public String getName() {
-        return name;
-    }
-    public double getCost() {
-        return cost;
+
+    public int getQuantity() {
+        return quantity;
     }
 }
-class AddOnServiceManager {
-    private Map<String, List<AddOnService>> serviceMap;
-    public AddOnServiceManager() {
-        serviceMap = new HashMap<>();
+
+class BookingHistory {
+    private List<Reservation> history;
+
+    public BookingHistory() {
+        history = new ArrayList<>();
     }
-    public void addService(String reservationId, AddOnService service) {
-        serviceMap.computeIfAbsent(reservationId, k -> new ArrayList<>()).add(service);
+
+    public void add(Reservation r) {
+        history.add(r);
     }
-    public List<AddOnService> getServices(String reservationId) {
-        return serviceMap.getOrDefault(reservationId, new ArrayList<>());
+
+    public List<Reservation> getAll() {
+        return new ArrayList<>(history);
     }
-    public double calculateTotalCost(String reservationId) {
-        double total = 0;
-        for (AddOnService s : getServices(reservationId)) {
-            total += s.getCost();
-        }
-        return total;
+}
+
+class BookingReportService {
+    private BookingHistory history;
+
+    public BookingReportService(BookingHistory history) {
+        this.history = history;
     }
-    public void displayServices(String reservationId) {
-        List<AddOnService> services = getServices(reservationId);
-        for (AddOnService s : services) {
-            System.out.println(s.getName() + " " + s.getCost());
+
+    public void displayAllBookings() {
+        for (Reservation r : history.getAll()) {
+            System.out.println(r.getId() + " " + r.getGuestName() + " " + r.getRoomType() + " " + r.getQuantity());
         }
     }
+
+    public void roomTypeSummary() {
+        Map<String, Integer> summary = new HashMap<>();
+
+        for (Reservation r : history.getAll()) {
+            summary.put(
+                    r.getRoomType(),
+                    summary.getOrDefault(r.getRoomType(), 0) + r.getQuantity()
+            );
+        }
+
+        for (Map.Entry<String, Integer> e : summary.entrySet()) {
+            System.out.println(e.getKey() + " " + e.getValue());
+        }
+    }
 }
+
 public class BookMyStayApp {
     public static void main(String[] args) {
-        Reservation r1 = new Reservation("R1", "Amit", "Single");
 
-        AddOnServiceManager manager = new AddOnServiceManager();
+        BookingHistory history = new BookingHistory();
 
-        manager.addService("R1", new AddOnService("Breakfast", 200));
-        manager.addService("R1", new AddOnService("AirportPickup", 500));
-        manager.addService("R1", new AddOnService("ExtraBed", 300));
+        history.add(new Reservation("R1", "Amit", "Single", 1));
+        history.add(new Reservation("R2", "Priya", "Double", 2));
+        history.add(new Reservation("R3", "Rahul", "Suite", 1));
 
-        manager.displayServices("R1");
+        BookingReportService reportService = new BookingReportService(history);
 
-        System.out.println(manager.calculateTotalCost("R1"));
+        reportService.displayAllBookings();
+
+        reportService.roomTypeSummary();
     }
 }
