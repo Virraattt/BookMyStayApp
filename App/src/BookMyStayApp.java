@@ -41,16 +41,15 @@ class RoomInventory {
         inventory.put(type, count);
     }
 
-    public synchronized boolean allocate(String type, int count) {
-        int available = inventory.getOrDefault(type, 0);
-        if (available >= count) {
-            inventory.put(type, available - count);
-            return true;
-        }
-        return false;
+    public int getAvailability(String type) {
+        return inventory.getOrDefault(type, 0);
     }
 
-    public synchronized void display() {
+    public void decrease(String type, int count) {
+        inventory.put(type, getAvailability(type) - count);
+    }
+
+    public void display() {
         for (Map.Entry<String, Integer> e : inventory.entrySet()) {
             System.out.println(e.getKey() + " " + e.getValue());
         }
@@ -64,46 +63,64 @@ class BookingRequestQueue {
         queue = new LinkedList<>();
     }
 
-    public synchronized void add(Reservation r) {
+    public void add(Reservation r) {
         queue.offer(r);
     }
 
-    public synchronized Reservation poll() {
+    public Reservation poll() {
         return queue.poll();
     }
 
-    public synchronized boolean isEmpty() {
+    public boolean isEmpty() {
         return queue.isEmpty();
     }
 }
 
-class BookingProcessor implements Runnable {
-    private BookingRequestQueue queue;
+class BookingService {
     private RoomInventory inventory;
+    private Set<String> allocatedRoomIds;
+    private Map<String, Set<String>> roomAllocations;
+    private int counter;
 
-    public BookingProcessor(BookingRequestQueue queue, RoomInventory inventory) {
-        this.queue = queue;
+    public BookingService(RoomInventory inventory) {
         this.inventory = inventory;
+        this.allocatedRoomIds = new HashSet<>();
+        this.roomAllocations = new HashMap<>();
+        this.counter = 1;
     }
 
-    public void run() {
-        while (true) {
-            Reservation r;
-            synchronized (queue) {
-                if (queue.isEmpty()) {
-                    break;
-                }
-                r = queue.poll();
-            }
+    private String generateRoomId(String roomType) {
+        String id;
+        do {
+            id = roomType.substring(0, 1).toUpperCase() + counter++;
+        } while (allocatedRoomIds.contains(id));
+        allocatedRoomIds.add(id);
+        return id;
+    }
 
-            if (r != null) {
-                boolean success = inventory.allocate(r.getRoomType(), r.getQuantity());
-                if (success) {
-                    System.out.println(Thread.currentThread().getName() + " Confirmed " + r.getId());
-                } else {
-                    System.out.println(Thread.currentThread().getName() + " Failed " + r.getId());
+    public void processQueue(BookingRequestQueue queue) {
+        while (!queue.isEmpty()) {
+            Reservation r = queue.poll();
+            int available = inventory.getAvailability(r.getRoomType());
+
+            if (available >= r.getQuantity()) {
+                for (int i = 0; i < r.getQuantity(); i++) {
+                    String roomId = generateRoomId(r.getRoomType());
+                    roomAllocations
+                            .computeIfAbsent(r.getRoomType(), k -> new HashSet<>())
+                            .add(roomId);
+                    System.out.println(r.getGuestName() + " " + roomId);
                 }
+                inventory.decrease(r.getRoomType(), r.getQuantity());
+            } else {
+                System.out.println("Failed " + r.getGuestName());
             }
+        }
+    }
+
+    public void displayAllocations() {
+        for (Map.Entry<String, Set<String>> e : roomAllocations.entrySet()) {
+            System.out.println(e.getKey() + " " + e.getValue());
         }
     }
 }
@@ -113,29 +130,21 @@ public class BookMyStayApp {
 
         RoomInventory inventory = new RoomInventory();
         inventory.addRoomType("Single", 2);
+        inventory.addRoomType("Double", 1);
 
         BookingRequestQueue queue = new BookingRequestQueue();
 
         queue.add(new Reservation("R1", "Amit", "Single", 1));
         queue.add(new Reservation("R2", "Priya", "Single", 1));
         queue.add(new Reservation("R3", "Rahul", "Single", 1));
+        queue.add(new Reservation("R4", "Neha", "Double", 1));
 
-        Thread t1 = new Thread(new BookingProcessor(queue, inventory));
-        Thread t2 = new Thread(new BookingProcessor(queue, inventory));
-        Thread t3 = new Thread(new BookingProcessor(queue, inventory));
+        BookingService bookingService = new BookingService(inventory);
 
-        t1.start();
-        t2.start();
-        t3.start();
-
-        try {
-            t1.join();
-            t2.join();
-            t3.join();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+        bookingService.processQueue(queue);
 
         inventory.display();
+
+        bookingService.displayAllocations();
     }
 }
