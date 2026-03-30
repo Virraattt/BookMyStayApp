@@ -105,7 +105,7 @@ class BookingService {
     }
 }
 
-public class Main {
+public class BookMyStayApp{
     public static void main(String[] args) {
 
         RoomInventory inventory = new RoomInventory();
