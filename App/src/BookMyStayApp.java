@@ -49,10 +49,6 @@ class RoomInventory {
         inventory.put(type, getAvailability(type) - count);
     }
 
-    public void increase(String type, int count) {
-        inventory.put(type, getAvailability(type) + count);
-    }
-
     public void display() {
         for (Map.Entry<String, Integer> e : inventory.entrySet()) {
             System.out.println(e.getKey() + " " + e.getValue());
@@ -60,65 +56,71 @@ class RoomInventory {
     }
 }
 
+class BookingRequestQueue {
+    private Queue<Reservation> queue;
+
+    public BookingRequestQueue() {
+        queue = new LinkedList<>();
+    }
+
+    public void add(Reservation r) {
+        queue.offer(r);
+    }
+
+    public Reservation poll() {
+        return queue.poll();
+    }
+
+    public boolean isEmpty() {
+        return queue.isEmpty();
+    }
+}
+
 class BookingService {
     private RoomInventory inventory;
-    private Map<String, List<String>> reservationRooms;
-    private Map<String, Reservation> confirmed;
-    private Stack<String> releasedRoomIds;
+    private Set<String> allocatedRoomIds;
+    private Map<String, Set<String>> roomAllocations;
     private int counter;
 
     public BookingService(RoomInventory inventory) {
         this.inventory = inventory;
-        this.reservationRooms = new HashMap<>();
-        this.confirmed = new HashMap<>();
-        this.releasedRoomIds = new Stack<>();
+        this.allocatedRoomIds = new HashSet<>();
+        this.roomAllocations = new HashMap<>();
         this.counter = 1;
     }
 
-    private String generateRoomId(String type) {
-        return type.substring(0, 1).toUpperCase() + counter++;
+    private String generateRoomId(String roomType) {
+        String id;
+        do {
+            id = roomType.substring(0, 1).toUpperCase() + counter++;
+        } while (allocatedRoomIds.contains(id));
+        allocatedRoomIds.add(id);
+        return id;
     }
 
-    public void confirm(Reservation r) {
-        if (inventory.getAvailability(r.getRoomType()) >= r.getQuantity()) {
-            List<String> rooms = new ArrayList<>();
-            for (int i = 0; i < r.getQuantity(); i++) {
-                String id = generateRoomId(r.getRoomType());
-                rooms.add(id);
+    public void processQueue(BookingRequestQueue queue) {
+        while (!queue.isEmpty()) {
+            Reservation r = queue.poll();
+            int available = inventory.getAvailability(r.getRoomType());
+
+            if (available >= r.getQuantity()) {
+                for (int i = 0; i < r.getQuantity(); i++) {
+                    String roomId = generateRoomId(r.getRoomType());
+                    roomAllocations
+                            .computeIfAbsent(r.getRoomType(), k -> new HashSet<>())
+                            .add(roomId);
+                    System.out.println(r.getGuestName() + " " + roomId);
+                }
+                inventory.decrease(r.getRoomType(), r.getQuantity());
+            } else {
+                System.out.println("Failed " + r.getGuestName());
             }
-            inventory.decrease(r.getRoomType(), r.getQuantity());
-            reservationRooms.put(r.getId(), rooms);
-            confirmed.put(r.getId(), r);
-            System.out.println("Confirmed " + r.getId());
-        } else {
-            System.out.println("Failed " + r.getId());
         }
     }
 
-    public void cancel(String reservationId) {
-        if (!confirmed.containsKey(reservationId)) {
-            System.out.println("Invalid cancellation " + reservationId);
-            return;
-        }
-
-        Reservation r = confirmed.get(reservationId);
-        List<String> rooms = reservationRooms.get(reservationId);
-
-        for (String roomId : rooms) {
-            releasedRoomIds.push(roomId);
-        }
-
-        inventory.increase(r.getRoomType(), rooms.size());
-
-        confirmed.remove(reservationId);
-        reservationRooms.remove(reservationId);
-
-        System.out.println("Cancelled " + reservationId);
-    }
-
-    public void displayReleased() {
-        while (!releasedRoomIds.isEmpty()) {
-            System.out.println(releasedRoomIds.pop());
+    public void displayAllocations() {
+        for (Map.Entry<String, Set<String>> e : roomAllocations.entrySet()) {
+            System.out.println(e.getKey() + " " + e.getValue());
         }
     }
 }
@@ -128,21 +130,21 @@ public class BookMyStayApp {
 
         RoomInventory inventory = new RoomInventory();
         inventory.addRoomType("Single", 2);
+        inventory.addRoomType("Double", 1);
 
-        BookingService service = new BookingService(inventory);
+        BookingRequestQueue queue = new BookingRequestQueue();
 
-        Reservation r1 = new Reservation("R1", "Amit", "Single", 2);
+        queue.add(new Reservation("R1", "Amit", "Single", 1));
+        queue.add(new Reservation("R2", "Priya", "Single", 1));
+        queue.add(new Reservation("R3", "Rahul", "Single", 1));
+        queue.add(new Reservation("R4", "Neha", "Double", 1));
 
-        service.confirm(r1);
+        BookingService bookingService = new BookingService(inventory);
+
+        bookingService.processQueue(queue);
 
         inventory.display();
 
-        service.cancel("R1");
-
-        inventory.display();
-
-        service.displayReleased();
-
-        service.cancel("R1");
+        bookingService.displayAllocations();
     }
 }
