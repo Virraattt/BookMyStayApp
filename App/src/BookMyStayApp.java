@@ -73,7 +73,7 @@ class AddOnServiceManager {
     }
 }
 
-public class Main {
+public class BookMyStayApp {
     public static void main(String[] args) {
 
         Reservation r1 = new Reservation("R1", "Amit", "Single");
